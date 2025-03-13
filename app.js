@@ -27,7 +27,7 @@ app.use(session({
   secret: 'The-strongest-secret-key-in-history',  // 设置 session 的 secret
   resave: false,  // 不允许重新保存未初始化的 session
   saveUninitialized: true, // 允许初始化未使用的 session
-  cookie: { secure: true } // 在生产环境中应设置为 true 以使用 HTTPS
+  cookie: { secure: false } // 在生产环境中应设置为 true 以使用 HTTPS
 }));
 
 // 统一密码
