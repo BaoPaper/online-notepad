@@ -4,134 +4,245 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>在线记事本</title>
+  <title><%= currentTitle %> - 在线记事本</title>
   <link rel="stylesheet" href="/css/style.css" id="theme-style">
-  <!-- 添加 Marked.js 用于解析 Markdown -->
   <script src="/js/marked.min.js"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      // 获取当前页码
-      var currentPage = window.location.pathname.split('/').pop(); // 提取页码
-      var links = document.querySelectorAll('.bar a'); // 选择 .bar 中的所有链接
+</head>
 
-      // 遍历链接，设置 active 类
-      links.forEach(function (link) {
-        if (link.getAttribute('href').endsWith('/' + currentPage)) {
-          link.classList.add('active'); // 添加 .active 类
-        } else {
-          link.classList.remove('active'); // 确保其他链接没有 .active 类
+<body>
+  <div class="app-container">
+    <!-- 侧边栏遮罩 -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <!-- 侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <button class="new-note-btn" id="new-note-btn">+ 新建笔记</button>
+      </div>
+      <div class="note-list" id="note-list">
+        <% notes.forEach(function(n) { %>
+          <div class="note-item <%= n.id === currentId ? 'active' : '' %>" data-id="<%= n.id %>">
+            <a href="/note/<%= n.id %>" class="note-link"><%= n.title %></a>
+            <button class="delete-btn" data-id="<%= n.id %>" title="删除">×</button>
+          </div>
+        <% }); %>
+      </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <div class="toolbar">
+        <button class="menu-toggle-btn" id="menu-toggle">☰</button>
+        <input type="text" class="title-input" id="title-input" value="<%= currentTitle %>" placeholder="笔记标题">
+        <div class="toolbar-actions">
+          <label class="upload-btn" title="上传附件">
+            <input type="file" id="file-input" hidden>
+            📎
+          </label>
+          <button id="toggle-view" title="切换视图">预览</button>
+        </div>
+      </div>
+      <div class="editor-container" id="editor-container">
+        <textarea name="note" id="editor" spellcheck="false"><%= note %></textarea>
+        <div id="preview" class="preview-pane"></div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    (function() {
+      var currentId = '<%= currentId %>';
+      var editor = document.getElementById('editor');
+      var preview = document.getElementById('preview');
+      var editorContainer = document.getElementById('editor-container');
+      var toggleViewBtn = document.getElementById('toggle-view');
+      var titleInput = document.getElementById('title-input');
+      var sidebar = document.getElementById('sidebar');
+      var sidebarOverlay = document.getElementById('sidebar-overlay');
+      var menuToggle = document.getElementById('menu-toggle');
+      var newNoteBtn = document.getElementById('new-note-btn');
+      var fileInput = document.getElementById('file-input');
+
+      // 渲染 Markdown
+      function renderMarkdown() {
+        preview.innerHTML = marked.parse(editor.value);
+      }
+      renderMarkdown();
+
+      // 防抖
+      function debounce(func, wait) {
+        var timeout;
+        return function() {
+          clearTimeout(timeout);
+          timeout = setTimeout(function() { func(); }, wait);
+        };
+      }
+
+      // 保存内容
+      function saveContent() {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/save/' + currentId);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.send('note=' + encodeURIComponent(editor.value));
+      }
+
+      // 保存标题
+      var saveTitle = debounce(function() {
+        var xhr = new XMLHttpRequest();
+        xhr.open('PUT', '/api/notes/' + currentId + '/title');
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
+          if (xhr.status === 200) {
+            var res = JSON.parse(xhr.responseText);
+            document.title = res.title + ' - 在线记事本';
+            var item = document.querySelector('.note-item[data-id="' + currentId + '"] .note-link');
+            if (item) item.textContent = res.title;
+          }
+        };
+        xhr.send(JSON.stringify({ title: titleInput.value }));
+      }, 500);
+
+      // 编辑器输入
+      editor.addEventListener('input', debounce(function() {
+        renderMarkdown();
+        saveContent();
+      }, 300));
+
+      // 标题输入
+      titleInput.addEventListener('input', saveTitle);
+
+      // Ctrl+S 保存
+      document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
+          e.preventDefault();
+          saveContent();
         }
       });
 
-      // 获取编辑器和预览元素
-      var editor = document.getElementById('editor');
-      var preview = document.getElementById('preview');
-      var toggleViewBtn = document.getElementById('toggle-view');
-      var editorContainer = document.querySelector('.editor-container');
-
-      // 初始渲染 Markdown
-      renderMarkdown();
-
-      // 移动设备默认视图切换
+      // 视图切换
       function checkMobileView() {
         if (window.innerWidth <= 768) {
-          // 在移动设备上默认只显示编辑器
           editorContainer.classList.add('editor-only');
+          sidebar.classList.remove('open');
         } else {
-          editorContainer.classList.remove('editor-only');
-          editorContainer.classList.remove('preview-only');
+          editorContainer.classList.remove('editor-only', 'preview-only');
         }
       }
-
-      // 初始检查并设置视图
       checkMobileView();
+      window.addEventListener('resize', checkMobileView);
 
-      // 切换视图按钮功能
-      toggleViewBtn.addEventListener('click', function () {
+      toggleViewBtn.addEventListener('click', function() {
         if (editorContainer.classList.contains('editor-only')) {
           editorContainer.classList.remove('editor-only');
           editorContainer.classList.add('preview-only');
           toggleViewBtn.textContent = '编辑';
-          console.log('切换到预览模式');
         } else if (editorContainer.classList.contains('preview-only')) {
           editorContainer.classList.remove('preview-only');
-          editorContainer.classList.remove('editor-only');
           toggleViewBtn.textContent = '预览';
-          console.log('切换到编辑和预览模式');
         } else {
           editorContainer.classList.add('editor-only');
           toggleViewBtn.textContent = '预览';
-          console.log('切换到仅编辑模式');
         }
       });
 
-      // 窗口大小变化时重新检查视图
-      window.addEventListener('resize', checkMobileView);
-
-      // 防抖函数
-      function debounce(func, wait) {
-        let timeout;
-        return function () {
-          clearTimeout(timeout);
-          timeout = setTimeout(() => func.apply(this, arguments), wait);
-        };
+      // 侧边栏切换（移动端）
+      function closeSidebar() {
+        sidebar.classList.remove('open');
+        sidebarOverlay.classList.remove('open');
       }
-
-      // 渲染 Markdown 函数
-      function renderMarkdown() {
-        preview.innerHTML = marked.parse(editor.value);
+      function openSidebar() {
+        sidebar.classList.add('open');
+        sidebarOverlay.classList.add('open');
       }
-
-      // 监听编辑器的 input 事件，实时更新预览
-      editor.addEventListener('input', debounce(function () {
-        renderMarkdown();
-        save();
-      }, 300)); // 停止输入300毫秒后更新预览和保存
-
-      // 捕获 Ctrl + S 事件
-      document.addEventListener('keydown', function (event) {
-        if (event.ctrlKey && (event.key === 's' || event.key === 'S')) {
-          save();
-          event.preventDefault(); // 阻止浏览器默认行为
+      menuToggle.addEventListener('click', function() {
+        if (sidebar.classList.contains('open')) {
+          closeSidebar();
+        } else {
+          openSidebar();
         }
       });
+      sidebarOverlay.addEventListener('click', closeSidebar);
 
-      // 保存内容函数
-      function save() {
-        var text = editor.value;
-        var id = window.location.pathname.split('/').pop(); // 获取当前页面 URL 中的 id
+      // 点击笔记链接后关闭侧边栏
+      document.querySelectorAll('.note-link').forEach(function(link) {
+        link.addEventListener('click', closeSidebar);
+      });
+
+      // 新建笔记
+      newNoteBtn.addEventListener('click', function() {
         var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/save/' + id); // 包含 id 的保存 URL
-        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        xhr.send('note=' + encodeURIComponent(text));
-      }
+        xhr.open('POST', '/api/notes');
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
+          if (xhr.status === 200) {
+            var note = JSON.parse(xhr.responseText);
+            window.location.href = '/note/' + note.id;
+          }
+        };
+        xhr.send(JSON.stringify({ title: '新建笔记' }));
+      });
 
-      // 初始渲染 Markdown
-      renderMarkdown();
-    });
+      // 删除笔记
+      document.getElementById('note-list').addEventListener('click', function(e) {
+        if (e.target.classList.contains('delete-btn')) {
+          e.preventDefault();
+          e.stopPropagation();
+          var id = e.target.dataset.id;
+          if (!confirm('确定删除这个笔记吗？')) return;
+
+          var xhr = new XMLHttpRequest();
+          xhr.open('DELETE', '/api/notes/' + id);
+          xhr.onload = function() {
+            if (xhr.status === 200) {
+              if (id === currentId) {
+                window.location.href = '/';
+              } else {
+                e.target.parentElement.remove();
+              }
+            }
+          };
+          xhr.send();
+        }
+      });
+
+      // 文件上传
+      fileInput.addEventListener('change', function() {
+        var file = fileInput.files[0];
+        if (!file) return;
+
+        if (file.size > 10 * 1024 * 1024) {
+          alert('文件大小不能超过 10MB');
+          fileInput.value = '';
+          return;
+        }
+
+        var formData = new FormData();
+        formData.append('file', file);
+        formData.append('noteId', currentId);
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/upload');
+        xhr.onload = function() {
+          if (xhr.status === 200) {
+            var res = JSON.parse(xhr.responseText);
+            // 在光标位置插入 markdown
+            var start = editor.selectionStart;
+            var end = editor.selectionEnd;
+            var text = editor.value;
+            editor.value = text.substring(0, start) + res.markdown + text.substring(end);
+            editor.selectionStart = editor.selectionEnd = start + res.markdown.length;
+            editor.focus();
+            renderMarkdown();
+            saveContent();
+          } else {
+            alert('上传失败');
+          }
+        };
+        xhr.send(formData);
+        fileInput.value = '';
+      });
+    })();
   </script>
-</head>
-
-<body>
-  <div class="container">
-    <div class="note-container">
-      <div class="bar">
-        <a href="/note/1">1</a>
-        <a href="/note/2">2</a>
-        <a href="/note/3">3</a>
-        <a href="/note/4">4</a>
-        <a href="/note/5">5</a>
-        <a href="/note/6">6</a>
-        <a href="/note/7">7</a>
-        <a href="/note/8">8</a>
-        <button id="toggle-view" title="切换视图">预览</button>
-      </div>
-      <div class="editor-container">
-        <textarea name="note" id="editor" spellcheck="false"><%= note %></textarea>
-        <div id="preview" class="preview-pane"></div>
-      </div>
-    </div>
-  </div>
 </body>
 
 </html>

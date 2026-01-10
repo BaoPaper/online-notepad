@@ -5,35 +5,93 @@ const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 const crypto = require('crypto');
+const fs = require('fs');
+const multer = require('multer');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const port = 3000;
-const fs = require('fs');
 
-// 使用 body-parser 解析 POST 请求的 body
+// 路径常量
+const NOTES_DIR = path.join(__dirname, 'notes');
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const META_FILE = path.join(NOTES_DIR, 'meta.json');
+
+// 确保目录存在
+if (!fs.existsSync(NOTES_DIR)) fs.mkdirSync(NOTES_DIR);
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR);
+
+// Meta 数据读写
+function readMeta() {
+  if (!fs.existsSync(META_FILE)) return { notes: [] };
+  return JSON.parse(fs.readFileSync(META_FILE, 'utf8'));
+}
+
+function writeMeta(meta) {
+  fs.writeFileSync(META_FILE, JSON.stringify(meta, null, 2));
+}
+
+// 迁移旧笔记 (1.txt ~ 8.txt)
+function migrateOldNotes() {
+  const meta = readMeta();
+  if (meta.migrated) return;
+
+  for (let i = 1; i <= 8; i++) {
+    const oldPath = path.join(NOTES_DIR, `${i}.txt`);
+    if (fs.existsSync(oldPath)) {
+      const content = fs.readFileSync(oldPath, 'utf8');
+      if (content.trim()) {
+        const id = uuidv4();
+        const newPath = path.join(NOTES_DIR, `${id}.txt`);
+        fs.writeFileSync(newPath, content);
+        meta.notes.push({
+          id,
+          title: `笔记 ${i}`,
+          createdAt: Date.now() - (8 - i) * 1000 // 保持原顺序
+        });
+      }
+      fs.unlinkSync(oldPath);
+    }
+  }
+
+  meta.migrated = true;
+  writeMeta(meta);
+}
+
+// 启动时迁移
+migrateOldNotes();
+
+// 文件上传配置
+const storage = multer.diskStorage({
+  destination: UPLOADS_DIR,
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${uuidv4()}${ext}`);
+  }
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+});
+
+// 中间件
 app.use(bodyParser.urlencoded({ extended: true }));
-
-// 添加 cookie-parser 中间件
+app.use(bodyParser.json());
 app.use(cookieParser());
-
-// 提供静态文件 (CSS)
 app.use(express.static(path.join(__dirname, 'public')));
-
-// 配置 favicon
+app.use('/uploads', express.static(UPLOADS_DIR));
 app.use(favicon(path.join(__dirname, 'public', 'image', 'favicon.png')));
 
-// 配置 session 中间件
 app.use(session({
-  secret: 'The-strongest-secret-key-in-history',  // 设置 session 的 secret
-  resave: false,  // 不允许重新保存未初始化的 session
-  saveUninitialized: true, // 允许初始化未使用的 session
-  cookie: { secure: false } // 在生产环境中应设置为 true 以使用 HTTPS
+  secret: 'The-strongest-secret-key-in-history',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false }
 }));
 
 // 统一密码
 const correctPassword = process.env.PASSWORD || 'password';
 
-// 生成一个加密后的密码 cookie
 function generateHashedPassword(password) {
   return crypto
     .createHmac('sha256', 'The-strongest-secret-key-in-history')
@@ -41,19 +99,13 @@ function generateHashedPassword(password) {
     .digest('hex');
 }
 
-// 检查用户是否已通过 cookie 登录的中间件
+// Cookie 自动登录中间件
 app.use((req, res, next) => {
-  // 检查用户是否已在 session 中登录
   if (!req.session.isLoggedIn) {
-    // 如果未登录，检查是否有有效的记住我 cookie
     const storedHashedPassword = req.cookies.rememberedPassword;
-    
     if (storedHashedPassword) {
       const expectedHash = generateHashedPassword(correctPassword);
-      
-      // 验证 cookie 中的哈希值
       if (storedHashedPassword === expectedHash) {
-        // cookie 有效，设置 session 登录状态
         req.session.isLoggedIn = true;
       }
     }
@@ -61,92 +113,205 @@ app.use((req, res, next) => {
   next();
 });
 
-// 渲染登录页面
-app.get('/login', (req, res) => {
-  if (req.session.isLoggedIn) {
-    return res.redirect('/note/1');
+// 认证检查
+function requireAuth(req, res, next) {
+  if (!req.session.isLoggedIn) {
+    return req.xhr || req.headers.accept?.includes('json')
+      ? res.status(401).json({ success: false, message: 'Unauthorized' })
+      : res.redirect('/login');
   }
+  next();
+}
+
+// 登录页面
+app.get('/login', (req, res) => {
+  if (req.session.isLoggedIn) return res.redirect('/');
   res.render('login');
 });
 
-// 处理登录请求
 app.post('/login', (req, res) => {
-  const password = req.body.password;
-  const rememberMe = req.body.rememberMe === 'on';
-  
+  const { password, rememberMe } = req.body;
   if (password === correctPassword) {
-    // 登录成功，设置 session 标志
     req.session.isLoggedIn = true;
-    
-    // 如果用户选择了"记住我"选项，设置持久化 cookie
-    if (rememberMe) {
-      const hashedPassword = generateHashedPassword(password);
-      
-      // 设置长期有效的 cookie（30天）
-      res.cookie('rememberedPassword', hashedPassword, {
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30天有效期
-        httpOnly: true, // 防止客户端 JavaScript 访问
-        sameSite: 'strict' // 防止 CSRF 攻击
+    if (rememberMe === 'on') {
+      res.cookie('rememberedPassword', generateHashedPassword(password), {
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        httpOnly: true,
+        sameSite: 'strict'
       });
     }
-    
-    res.redirect('/note/1');
+    res.redirect('/');
   } else {
     res.send('密码错误，请重新输入。<br><a href="/login">返回登录页</a>');
   }
 });
 
-// 退出登录
 app.get('/logout', (req, res) => {
-  // 清除 session
   req.session.destroy();
-  
-  // 清除记住我 cookie
   res.clearCookie('rememberedPassword');
-  
-  // 重定向到登录页
   res.redirect('/login');
 });
 
-//渲染导航页
-app.get('/', (req, res) => {
-  res.redirect('/note/1');
+// 首页 - 重定向到第一个笔记或创建新笔记
+app.get('/', requireAuth, (req, res) => {
+  const meta = readMeta();
+  if (meta.notes.length > 0) {
+    // 按创建时间倒序，取最新的
+    const sorted = [...meta.notes].sort((a, b) => b.createdAt - a.createdAt);
+    res.redirect(`/note/${sorted[0].id}`);
+  } else {
+    // 创建第一个笔记
+    const id = uuidv4();
+    meta.notes.push({ id, title: '新建笔记', createdAt: Date.now() });
+    writeMeta(meta);
+    fs.writeFileSync(path.join(NOTES_DIR, `${id}.txt`), '');
+    res.redirect(`/note/${id}`);
+  }
 });
 
-//渲染记事本页面
-app.get('/note/:id', (req, res) => {
-  // 检查是否已登录
-  if (!req.session.isLoggedIn) {
-    return res.redirect('/login');
-  }
-  
-  const id = parseInt(req.params.id, 10); // 将 id 转换为整数
-  if (isNaN(id) || id < 1 || id > 8) {
-    return res.status(400).send('不允许的访问！<br><a href="/">返回首页</a>');
-  }
+// 笔记页面
+app.get('/note/:id', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const meta = readMeta();
+  const note = meta.notes.find(n => n.id === id);
+  if (!note) return res.status(404).send('笔记不存在<br><a href="/">返回首页</a>');
 
-  const filePath = path.join(__dirname, 'notes', `${id}.txt`);
-  const noteContent = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
-  res.render('note', { note: noteContent });
+  const filePath = path.join(NOTES_DIR, `${id}.txt`);
+  const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+  const sortedNotes = [...meta.notes].sort((a, b) => b.createdAt - a.createdAt);
+  res.render('note', { note: content, notes: sortedNotes, currentId: id, currentTitle: note.title });
 });
 
-// 保存记事本内容
-app.post('/save/:id', (req, res) => {
-  if (!req.session.isLoggedIn) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
+// API: 获取笔记列表
+app.get('/api/notes', requireAuth, (req, res) => {
+  const meta = readMeta();
+  const sorted = [...meta.notes].sort((a, b) => b.createdAt - a.createdAt);
+  res.json(sorted);
+});
+
+// API: 创建笔记
+app.post('/api/notes', requireAuth, (req, res) => {
+  const meta = readMeta();
+  const id = uuidv4();
+  const note = { id, title: req.body.title || '新建笔记', createdAt: Date.now() };
+  meta.notes.push(note);
+  writeMeta(meta);
+  fs.writeFileSync(path.join(NOTES_DIR, `${id}.txt`), '');
+  res.json(note);
+});
+
+// 从内容中提取引用的附件文件名
+function extractAttachments(content) {
+  const regex = /\/uploads\/([a-f0-9-]+\.[a-z0-9]+)/gi;
+  const matches = [];
+  let match;
+  while ((match = regex.exec(content)) !== null) {
+    matches.push(match[1]);
   }
-  const id = req.params.id;
-  const filePath = path.join(__dirname, 'notes', `${id}.txt`);
-  const noteContent = req.body.note;
-  fs.writeFileSync(filePath, noteContent);
-  res.json({ success: true, message: 'Note saved successfully' });
-  console.log(`save ${id}`);
+  return matches;
+}
+
+// 删除附件文件
+function deleteAttachment(filename) {
+  const filePath = path.join(UPLOADS_DIR, filename);
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+}
+
+// API: 删除笔记
+app.delete('/api/notes/:id', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const meta = readMeta();
+  const note = meta.notes.find(n => n.id === id);
+  if (!note) return res.status(404).json({ success: false, message: 'Not found' });
+
+  // 删除笔记关联的附件
+  if (note.attachments) {
+    note.attachments.forEach(deleteAttachment);
+  }
+
+  meta.notes = meta.notes.filter(n => n.id !== id);
+  writeMeta(meta);
+
+  const filePath = path.join(NOTES_DIR, `${id}.txt`);
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+  res.json({ success: true });
+});
+
+// API: 重命名笔记
+app.put('/api/notes/:id/title', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { title } = req.body;
+  const meta = readMeta();
+  const note = meta.notes.find(n => n.id === id);
+  if (!note) return res.status(404).json({ success: false, message: 'Not found' });
+
+  note.title = title || '无标题';
+  writeMeta(meta);
+  res.json({ success: true, title: note.title });
+});
+
+// API: 保存笔记内容
+app.post('/save/:id', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const meta = readMeta();
+  const note = meta.notes.find(n => n.id === id);
+  if (!note) {
+    return res.status(404).json({ success: false, message: 'Not found' });
+  }
+
+  const content = req.body.note || '';
+  const filePath = path.join(NOTES_DIR, `${id}.txt`);
+  fs.writeFileSync(filePath, content);
+
+  // 清理不再引用的附件
+  const currentAttachments = extractAttachments(content);
+  const oldAttachments = note.attachments || [];
+  oldAttachments.forEach(filename => {
+    if (!currentAttachments.includes(filename)) {
+      deleteAttachment(filename);
+    }
+  });
+  note.attachments = currentAttachments;
+  writeMeta(meta);
+
+  res.json({ success: true });
+});
+
+// API: 上传附件
+app.post('/api/upload', requireAuth, upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, message: 'No file' });
+
+  const { noteId } = req.body;
+  const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(req.file.originalname);
+  const url = `/uploads/${req.file.filename}`;
+  const markdown = isImage
+    ? `![${req.file.originalname}](${url})`
+    : `[${req.file.originalname}](${url})`;
+
+  // 关联附件到笔记
+  if (noteId) {
+    const meta = readMeta();
+    const note = meta.notes.find(n => n.id === noteId);
+    if (note) {
+      note.attachments = note.attachments || [];
+      note.attachments.push(req.file.filename);
+      writeMeta(meta);
+    }
+  }
+
+  res.json({
+    success: true,
+    url,
+    filename: req.file.filename,
+    originalname: req.file.originalname,
+    markdown
+  });
 });
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// 启动服务器
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });

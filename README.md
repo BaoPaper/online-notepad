@@ -26,7 +26,35 @@
 
 </p>
 
-###### **安装步骤**
+## Features
+
+- **Unlimited Notes** - Create as many notes as you need
+- **Markdown Preview** - Real-time markdown rendering with Marked.js
+- **File Attachments** - Upload files (max 10MB) and insert as markdown links
+- **Auto Save** - Content saves automatically as you type
+- **Session Auth** - Password protection with "Remember Me" cookie
+- **Responsive UI** - Sidebar navigation with mobile support
+
+## Project Structure
+
+```
+online-notepad/
+├── app.js              # Express server with all routes and APIs
+├── package.json        # Dependencies
+├── notes/              # Note storage
+│   ├── meta.json       # Note metadata (id, title, createdAt)
+│   └── {uuid}.txt      # Note content files
+├── uploads/            # Uploaded attachments
+├── public/
+│   ├── css/style.css   # Styles
+│   ├── js/marked.min.js
+│   └── image/
+└── views/
+    ├── note.ejs        # Main notepad view
+    └── login.ejs       # Login page
+```
+
+## Installation
 
 1. Clone the repo
 
@@ -45,25 +73,41 @@ npm install
 node app.js
 ```
 
-### 使用到的框架
+4. (Optional) Set custom password
+```sh
+PASSWORD=your_password node app.js
+```
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/notes` | List all notes |
+| POST | `/api/notes` | Create new note |
+| DELETE | `/api/notes/:id` | Delete note |
+| PUT | `/api/notes/:id/title` | Rename note |
+| POST | `/save/:id` | Save note content |
+| POST | `/api/upload` | Upload attachment |
+
+## Tech Stack
 
 - [Node.js](https://github.com/nodejs/node)
 - [Express.js](https://expressjs.com)
-- [Express-session](https://github.com/expressjs/session)
-- [Server-favicon](https://github.com/expressjs/serve-favicon)
-- [Marked.js](https://github.com/markedjs/marked)
+- [express-session](https://github.com/expressjs/session)
+- [multer](https://github.com/expressjs/multer) - File uploads
+- [uuid](https://github.com/uuidjs/uuid) - Unique IDs
+- [Marked.js](https://github.com/markedjs/marked) - Markdown parsing
 
-### 版本控制
+## Environment Variables
 
-该项目使用Git进行版本管理。您可以在repository参看当前可用版本。
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PASSWORD` | Login password | `password` |
+| `PORT` | Server port | `3000` |
 
-### 版权说明
+## License
 
-该项目签署了MIT 授权许可，详情请参阅 [LICENSE.txt](https://github.com/BaoPaper/online-notepad/blob/master/LICENSE.txt)
-
-### 鸣谢
-
-- [最好的中文README模板](https://github.com/shaojintian/Best_README_template)
+MIT License - see [LICENSE.txt](https://github.com/BaoPaper/online-notepad/blob/master/LICENSE.txt)
 
 <!-- links -->
 [your-project-path]:BaoPaper/online-notepad
@@ -77,9 +121,3 @@ node app.js
 [issues-url]: https://img.shields.io/github/issues/BaoPaper/online-notepad.svg
 [license-shield]: https://img.shields.io/github/license/BaoPaper/online-notepad.svg?style=flat-square
 [license-url]: https://github.com/BaoPaper/online-notepad/blob/master/LICENSE.txt
-[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=flat-square&logo=linkedin&colorB=555
-[linkedin-url]: https://linkedin.com/in/shaojintian
-
-
-
-
