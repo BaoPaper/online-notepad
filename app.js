@@ -35,6 +35,9 @@ function migrateOldNotes() {
   const meta = readMeta();
   if (meta.migrated) return;
 
+  // 获取当前基础时间，避免循环中 Date.now() 产生微小差异导致顺序不可控
+  const baseTime = Date.now();
+
   for (let i = 1; i <= 8; i++) {
     const oldPath = path.join(NOTES_DIR, `${i}.txt`);
     if (fs.existsSync(oldPath)) {
@@ -46,7 +49,7 @@ function migrateOldNotes() {
         meta.notes.push({
           id,
           title: `笔记 ${i}`,
-          createdAt: Date.now() - (8 - i) * 1000 // 保持原顺序
+          createdAt: baseTime - i * 1000
         });
       }
       fs.unlinkSync(oldPath);
