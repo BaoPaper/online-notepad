@@ -1,10 +1,9 @@
 const express = require('express');
-const session = require('express-session');
+const jwt = require('jsonwebtoken');
 const favicon = require('serve-favicon');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 const path = require('path');
-const crypto = require('crypto');
 const fs = require('fs');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
@@ -82,64 +81,70 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use(favicon(path.join(__dirname, 'public', 'image', 'favicon.png')));
 
-app.use(session({
-  secret: 'The-strongest-secret-key-in-history',
-  resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false }
-}));
 
 // 统一密码
 const correctPassword = process.env.PASSWORD || 'password';
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SESSION_EXPIRES_IN = process.env.JWT_SESSION_EXPIRES_IN || '1d';
+const JWT_REMEMBER_EXPIRES_IN = process.env.JWT_REMEMBER_EXPIRES_IN || '30d';
 
-function generateHashedPassword(password) {
-  return crypto
-    .createHmac('sha256', 'The-strongest-secret-key-in-history')
-    .update(password)
-    .digest('hex');
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET is required');
 }
 
-// Cookie 自动登录中间件
-app.use((req, res, next) => {
-  if (!req.session.isLoggedIn) {
-    const storedHashedPassword = req.cookies.rememberedPassword;
-    if (storedHashedPassword) {
-      const expectedHash = generateHashedPassword(correctPassword);
-      if (storedHashedPassword === expectedHash) {
-        req.session.isLoggedIn = true;
-      }
-    }
+function signAuthToken(rememberMe) {
+  return jwt.sign(
+    { role: 'user' },
+    JWT_SECRET,
+    { expiresIn: rememberMe ? JWT_REMEMBER_EXPIRES_IN : JWT_SESSION_EXPIRES_IN }
+  );
+}
+
+function verifyAuthToken(token) {
+  if (!token) return null;
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (err) {
+    return null;
   }
-  next();
-});
+}
+
+
+// Cookie 自动登录中间件
 
 // 认证检查
 function requireAuth(req, res, next) {
-  if (!req.session.isLoggedIn) {
+  const payload = verifyAuthToken(req.cookies.auth_token);
+  if (!payload) {
     return req.xhr || req.headers.accept?.includes('json')
       ? res.status(401).json({ success: false, message: 'Unauthorized' })
       : res.redirect('/login');
   }
+  req.user = payload;
   next();
 }
 
 // 登录页面
 app.get('/login', (req, res) => {
-  if (req.session.isLoggedIn) return res.redirect('/');
+  const payload = verifyAuthToken(req.cookies.auth_token);
+  if (payload) return res.redirect('/');
   res.render('login');
 });
 
 app.post('/login', (req, res) => {
   const { password, rememberMe } = req.body;
   if (password === correctPassword) {
-    req.session.isLoggedIn = true;
-    if (rememberMe === 'on') {
-      res.cookie('rememberedPassword', generateHashedPassword(password), {
-        maxAge: 30 * 24 * 60 * 60 * 1000,
-        httpOnly: true,
-        sameSite: 'strict'
-      });
+    const remember = rememberMe === 'on';
+    const token = signAuthToken(remember);
+    const cookieOptions = {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: false
+    };
+    if (remember) {
+      cookieOptions.maxAge = 30 * 24 * 60 * 60 * 1000;
     }
+    res.cookie('auth_token', token, cookieOptions);
     res.redirect('/');
   } else {
     res.send('密码错误，请重新输入。<br><a href="/login">返回登录页</a>');
@@ -147,8 +152,7 @@ app.post('/login', (req, res) => {
 });
 
 app.get('/logout', (req, res) => {
-  req.session.destroy();
-  res.clearCookie('rememberedPassword');
+  res.clearCookie('auth_token');
   res.redirect('/login');
 });
 
