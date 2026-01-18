@@ -1,5 +1,5 @@
 # 使用Node.js 22.2.0作为基础镜像
-FROM node:22.2.0-alpine
+FROM node:22.18.0-alpine
 
 # 设置工作目录
 WORKDIR /home/app
