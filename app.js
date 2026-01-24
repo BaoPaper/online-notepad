@@ -189,6 +189,25 @@ app.get('/note/:id', requireAuth, (req, res) => {
   res.render('note', { note: content, notes: sortedNotes, currentId: id, currentTitle: note.title });
 });
 
+// API: 获取单个笔记内容
+app.get('/api/notes/:id/content', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const meta = readMeta();
+  const note = meta.notes.find(n => n.id === id);
+  if (!note) return res.status(404).json({ success: false, message: 'Not found' });
+
+  const filePath = path.join(NOTES_DIR, `${id}.txt`);
+  const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+
+  res.json({
+    success: true,
+    id: note.id,
+    title: note.title,
+    content,
+    createdAt: note.createdAt
+  });
+});
+
 // API: 获取笔记列表
 app.get('/api/notes', requireAuth, (req, res) => {
   const meta = readMeta();

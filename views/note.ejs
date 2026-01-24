@@ -62,12 +62,46 @@
       var menuToggle = document.getElementById('menu-toggle');
       var newNoteBtn = document.getElementById('new-note-btn');
       var fileInput = document.getElementById('file-input');
+      var noteList = document.getElementById('note-list');
 
       // 渲染 Markdown
       function renderMarkdown() {
         preview.innerHTML = marked.parse(editor.value);
       }
       renderMarkdown();
+
+      function setActiveNote(id) {
+        var currentActive = document.querySelector('.note-item.active');
+        if (currentActive) currentActive.classList.remove('active');
+        var nextActive = document.querySelector('.note-item[data-id="' + id + '"]');
+        if (nextActive) nextActive.classList.add('active');
+      }
+
+      function updateNoteView(note) {
+        currentId = note.id;
+        editor.value = note.content || '';
+        titleInput.value = note.title || '无标题';
+        document.title = titleInput.value + ' - 在线记事本';
+        setActiveNote(note.id);
+        renderMarkdown();
+      }
+
+      function fetchNoteContent(id, fallbackUrl) {
+        fetch('/api/notes/' + id + '/content', { headers: { Accept: 'application/json' } })
+          .then(function(response) {
+            if (!response.ok) throw new Error('Request failed');
+            return response.json();
+          })
+          .then(function(data) {
+            if (!data || !data.success) throw new Error('Request failed');
+            updateNoteView(data);
+            history.pushState(null, '', '/note/' + data.id);
+            closeSidebar();
+          })
+          .catch(function() {
+            window.location.href = fallbackUrl || '/note/' + id;
+          });
+      }
 
       // 防抖
       function debounce(func, wait) {
@@ -163,9 +197,26 @@
       });
       sidebarOverlay.addEventListener('click', closeSidebar);
 
-      // 点击笔记链接后关闭侧边栏
-      document.querySelectorAll('.note-link').forEach(function(link) {
-        link.addEventListener('click', closeSidebar);
+      // 笔记列表点击切换
+      noteList.addEventListener('click', function(e) {
+        var link = e.target.closest('.note-link');
+        if (!link) return;
+        e.preventDefault();
+
+        var item = link.closest('.note-item');
+        if (!item) return;
+
+        var newId = item.dataset.id;
+        if (!newId || newId === currentId) {
+          closeSidebar();
+          return;
+        }
+
+        fetchNoteContent(newId, link.getAttribute('href'));
+      });
+
+      window.addEventListener('popstate', function() {
+        window.location.reload();
       });
 
       // 新建笔记
@@ -183,7 +234,7 @@
       });
 
       // 删除笔记
-      document.getElementById('note-list').addEventListener('click', function(e) {
+      noteList.addEventListener('click', function(e) {
         if (e.target.classList.contains('delete-btn')) {
           e.preventDefault();
           e.stopPropagation();
