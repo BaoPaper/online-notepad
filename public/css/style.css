@@ -132,6 +132,34 @@ body {
   padding: 8px 0;
 }
 
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px;
+  background: var(--surface-3);
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.logout-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--danger);
+}
+
 .note-item {
   display: flex;
   align-items: center;
@@ -526,6 +554,16 @@ body {
 
   .login-form input[type="submit"]:hover {
     background: var(--surface-hover);
+  }
+
+  .logout-btn {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+  }
+
+  .logout-btn:hover {
+    background: var(--surface-hover);
+    color: var(--danger);
   }
 
   .error-button {
