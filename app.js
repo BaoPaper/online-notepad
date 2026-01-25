@@ -9,6 +9,7 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
+app.locals.appName = '在线记事本';
 const port = 3000;
 
 // 路径常量
@@ -112,6 +113,46 @@ function verifyAuthToken(token) {
   }
 }
 
+function wantsJson(req) {
+  const accept = req.headers.accept || '';
+  return req.xhr
+    || accept.includes('application/json')
+    || req.path.startsWith('/api')
+    || req.path.startsWith('/save');
+}
+
+function wantsHtml(req) {
+  const accept = req.headers.accept || '';
+  return accept.includes('text/html');
+}
+
+function getDefaultErrorAction(req) {
+  const payload = verifyAuthToken(req.cookies.auth_token);
+  if (payload) {
+    return { href: '/', text: '返回首页' };
+  }
+  return { href: '/login', text: '返回登录页' };
+}
+
+function renderErrorPage(req, res, statusCode, title, message, action) {
+  if (wantsJson(req)) {
+    return res.status(statusCode).json({ success: false, message: message || title });
+  }
+
+  if (wantsHtml(req)) {
+    const fallbackAction = action || getDefaultErrorAction(req);
+    return res.status(statusCode).render('error', {
+      statusCode,
+      title,
+      message,
+      actionHref: fallbackAction?.href,
+      actionText: fallbackAction?.text
+    });
+  }
+
+  return res.status(statusCode).send(message || title);
+}
+
 
 // Cookie 自动登录中间件
 
@@ -119,7 +160,7 @@ function verifyAuthToken(token) {
 function requireAuth(req, res, next) {
   const payload = verifyAuthToken(req.cookies.auth_token);
   if (!payload) {
-    return req.xhr || req.headers.accept?.includes('json')
+    return wantsJson(req)
       ? res.status(401).json({ success: false, message: 'Unauthorized' })
       : res.redirect('/login');
   }
@@ -150,7 +191,14 @@ app.post('/login', (req, res) => {
     res.cookie('auth_token', token, cookieOptions);
     res.redirect('/');
   } else {
-    res.send('密码错误，请重新输入。<br><a href="/login">返回登录页</a>');
+    renderErrorPage(
+      req,
+      res,
+      401,
+      '密码错误',
+      '请检查密码后再试。',
+      { href: '/login', text: '返回登录页' }
+    );
   }
 });
 
@@ -181,7 +229,16 @@ app.get('/note/:id', requireAuth, (req, res) => {
   const { id } = req.params;
   const meta = readMeta();
   const note = meta.notes.find(n => n.id === id);
-  if (!note) return res.status(404).send('笔记不存在<br><a href="/">返回首页</a>');
+  if (!note) {
+    return renderErrorPage(
+      req,
+      res,
+      404,
+      '笔记不存在',
+      '该笔记可能已被删除或不存在。',
+      { href: '/', text: '返回首页' }
+    );
+  }
 
   const filePath = path.join(NOTES_DIR, `${id}.txt`);
   const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
@@ -333,6 +390,27 @@ app.post('/api/upload', requireAuth, upload.single('file'), (req, res) => {
     originalname: req.file.originalname,
     markdown
   });
+});
+
+app.use((req, res) => {
+  return renderErrorPage(
+    req,
+    res,
+    404,
+    '页面不存在',
+    '你访问的地址不存在或已被移除。'
+  );
+});
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  return renderErrorPage(
+    req,
+    res,
+    500,
+    '服务器错误',
+    '服务遇到问题，请稍后再试。'
+  );
 });
 
 app.set('view engine', 'ejs');

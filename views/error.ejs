@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= (title || 'Error') %> - <%= appName || 'Online Notepad' %></title>
+    <link rel="stylesheet" href="/css/style.css" id="theme-style">
+  </head>
+  <body class="error-page">
+    <div class="error-card">
+      <div class="error-code"><%= statusCode || '' %></div>
+      <h1 class="error-title"><%= title || 'Error' %></h1>
+      <p class="error-message"><%= message || '' %></p>
+      <div class="error-actions">
+        <% if (actionHref && actionText) { %>
+          <a class="error-button" href="<%= actionHref %>"><%= actionText %></a>
+        <% } %>
+        <% if (typeof secondaryHref !== 'undefined' && secondaryHref && secondaryText) { %>
+          <a class="error-link" href="<%= secondaryHref %>"><%= secondaryText %></a>
+        <% } %>
+      </div>
+    </div>
+  </body>
+</html>
