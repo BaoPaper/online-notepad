@@ -103,27 +103,33 @@ body {
 }
 
 .sidebar-header {
-  padding: 12px;
+  padding: 0;
   border-bottom: 1px solid var(--border);
   height: 57px;
   box-sizing: border-box;
+  display: flex;
 }
 
 .new-note-btn {
   width: 100%;
-  padding: 10px;
-  background: var(--accent);
+  height: 100%;
+  background: transparent;
   color: var(--text);
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 0;
+  font-size: 15px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .new-note-btn:hover {
-  background: var(--accent-hover);
+  background: var(--surface-hover);
+  /* 移除之前难以看清的高亮字体色，保持统一的文字颜色 */
 }
 
 .note-list {
@@ -576,15 +582,6 @@ body {
 }
 
 @media (prefers-color-scheme: dark) {
-  .new-note-btn {
-    background: var(--surface-2);
-    border: 1px solid var(--accent);
-  }
-
-  .new-note-btn:hover {
-    background: var(--surface-hover);
-  }
-
   .login-form input[type="submit"] {
     background: var(--surface-2);
     border: 1px solid var(--accent);
