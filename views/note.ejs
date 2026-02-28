@@ -142,7 +142,12 @@
         xhr.onload = function() {
           if (xhr.status === 200) {
             showStatus('已保存', 'success');
+          } else {
+            showStatus('保存失败', 'error');
           }
+        };
+        xhr.onerror = function() {
+          showStatus('网络异常', 'error');
         };
         xhr.send('note=' + encodeURIComponent(editor.value));
       }
@@ -158,8 +163,13 @@
             document.title = res.title + ' - 在线记事本';
             var item = document.querySelector('.note-item[data-id="' + currentId + '"] .note-link');
             if (item) item.textContent = res.title;
-            showStatus('标题已更新', 'success');
+            showStatus('已保存', 'success');
+          } else {
+            showStatus('标题保存失败', 'error');
           }
+        };
+        xhr.onerror = function() {
+          showStatus('网络异常', 'error');
         };
         xhr.send(JSON.stringify({ title: titleInput.value }));
       }, 500);
