@@ -258,6 +258,44 @@ body {
   background: var(--surface);
 }
 
+/* 状态指示器 */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  visibility: hidden;
+  font-size: 13px;
+  color: var(--text-subtle);
+  padding: 0 8px;
+  pointer-events: none;
+}
+
+.status-indicator.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--text-subtle);
+}
+
+.status-indicator.error .status-dot {
+  background-color: var(--danger);
+}
+
+.status-indicator.error .status-text {
+  color: var(--danger);
+}
+
+.status-text {
+  user-select: none;
+  white-space: nowrap;
+}
+
 .toolbar-actions {
   display: flex;
   gap: 8px;

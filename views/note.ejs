@@ -37,6 +37,10 @@
       <div class="toolbar">
         <button class="menu-toggle-btn" id="menu-toggle">☰</button>
         <input type="text" class="title-input" id="title-input" value="<%= currentTitle %>" placeholder="笔记标题">
+        <div id="status-indicator" class="status-indicator">
+          <span class="status-dot"></span>
+          <span class="status-text">已保存</span>
+        </div>
         <div class="toolbar-actions">
           <label class="upload-btn" title="上传附件">
             <input type="file" id="file-input" hidden>
@@ -66,6 +70,21 @@
       var newNoteBtn = document.getElementById('new-note-btn');
       var fileInput = document.getElementById('file-input');
       var noteList = document.getElementById('note-list');
+      var statusIndicator = document.getElementById('status-indicator');
+      var statusTimeout;
+
+      function showStatus(text, type) {
+        clearTimeout(statusTimeout);
+        var statusText = statusIndicator.querySelector('.status-text');
+        statusText.textContent = text || '已保存';
+
+        statusIndicator.className = 'status-indicator visible';
+        if (type) statusIndicator.classList.add(type);
+
+        statusTimeout = setTimeout(function() {
+          statusIndicator.classList.remove('visible');
+        }, 2000);
+      }
 
       // 渲染 Markdown
       function renderMarkdown() {
@@ -120,6 +139,11 @@
         var xhr = new XMLHttpRequest();
         xhr.open('POST', '/save/' + currentId);
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.onload = function() {
+          if (xhr.status === 200) {
+            showStatus('已保存', 'success');
+          }
+        };
         xhr.send('note=' + encodeURIComponent(editor.value));
       }
 
@@ -134,6 +158,7 @@
             document.title = res.title + ' - 在线记事本';
             var item = document.querySelector('.note-item[data-id="' + currentId + '"] .note-link');
             if (item) item.textContent = res.title;
+            showStatus('标题已更新', 'success');
           }
         };
         xhr.send(JSON.stringify({ title: titleInput.value }));
