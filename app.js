@@ -16,6 +16,8 @@ const port = 3000;
 const NOTES_DIR = path.join(__dirname, 'notes');
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const META_FILE = path.join(NOTES_DIR, 'meta.json');
+const MARKED_FILE = path.join(__dirname, 'node_modules', 'marked', 'lib', 'marked.umd.js');
+const DOMPURIFY_FILE = path.join(__dirname, 'node_modules', 'dompurify', 'dist', 'purify.min.js');
 
 // 确保目录存在
 if (!fs.existsSync(NOTES_DIR)) fs.mkdirSync(NOTES_DIR);
@@ -82,6 +84,12 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/js/marked.min.js', (req, res) => {
+  res.sendFile(MARKED_FILE);
+});
+app.get('/js/purify.min.js', (req, res) => {
+  res.sendFile(DOMPURIFY_FILE);
+});
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use(favicon(path.join(__dirname, 'public', 'image', 'favicon.png')));
 

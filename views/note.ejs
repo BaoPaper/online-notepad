@@ -7,6 +7,7 @@
   <title><%= currentTitle %> - 在线记事本</title>
   <link rel="stylesheet" href="/css/style.css" id="theme-style">
   <script src="/js/marked.min.js"></script>
+  <script src="/js/purify.min.js"></script>
 </head>
 
 <body>
@@ -91,7 +92,10 @@
 
       // 渲染 Markdown
       function renderMarkdown() {
-        preview.innerHTML = marked.parse(editor.value);
+        var rendered = marked.parse(editor.value || '');
+        preview.innerHTML = DOMPurify.sanitize(rendered, {
+          USE_PROFILES: { html: true }
+        });
       }
       renderMarkdown();
 
