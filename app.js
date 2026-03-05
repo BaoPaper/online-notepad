@@ -33,6 +33,24 @@ function writeMeta(meta) {
   fs.writeFileSync(META_FILE, JSON.stringify(meta, null, 2));
 }
 
+function getNoteUpdatedAt(note) {
+  if (typeof note.updatedAt === 'number') return note.updatedAt;
+  if (typeof note.createdAt === 'number') return note.createdAt;
+  return 0;
+}
+
+function sortNotesByUpdatedAt(notes) {
+  return [...notes].sort((a, b) => {
+    const updatedDiff = getNoteUpdatedAt(b) - getNoteUpdatedAt(a);
+    if (updatedDiff !== 0) return updatedDiff;
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
+}
+
+function markNoteAsEdited(note) {
+  note.updatedAt = Date.now();
+}
+
 // 迁移旧笔记 (1.txt ~ 8.txt)
 function migrateOldNotes() {
   const meta = readMeta();
@@ -52,7 +70,8 @@ function migrateOldNotes() {
         meta.notes.push({
           id,
           title: `笔记 ${i}`,
-          createdAt: baseTime - i * 1000
+          createdAt: baseTime - i * 1000,
+          updatedAt: baseTime - i * 1000
         });
       }
       fs.unlinkSync(oldPath);
@@ -219,13 +238,13 @@ app.get('/logout', (req, res) => {
 app.get('/', requireAuth, (req, res) => {
   const meta = readMeta();
   if (meta.notes.length > 0) {
-    // 按创建时间倒序，取最新的
-    const sorted = [...meta.notes].sort((a, b) => b.createdAt - a.createdAt);
+    const sorted = sortNotesByUpdatedAt(meta.notes);
     res.redirect(`/note/${sorted[0].id}`);
   } else {
     // 创建第一个笔记
     const id = uuidv4();
-    meta.notes.push({ id, title: '新建笔记', createdAt: Date.now() });
+    const now = Date.now();
+    meta.notes.push({ id, title: '新建笔记', createdAt: now, updatedAt: now });
     writeMeta(meta);
     fs.writeFileSync(path.join(NOTES_DIR, `${id}.txt`), '');
     res.redirect(`/note/${id}`);
@@ -250,7 +269,7 @@ app.get('/note/:id', requireAuth, (req, res) => {
 
   const filePath = path.join(NOTES_DIR, `${id}.txt`);
   const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
-  const sortedNotes = [...meta.notes].sort((a, b) => b.createdAt - a.createdAt);
+  const sortedNotes = sortNotesByUpdatedAt(meta.notes);
   res.render('note', { note: content, notes: sortedNotes, currentId: id, currentTitle: note.title });
 });
 
@@ -269,14 +288,15 @@ app.get('/api/notes/:id/content', requireAuth, (req, res) => {
     id: note.id,
     title: note.title,
     content,
-    createdAt: note.createdAt
+    createdAt: note.createdAt,
+    updatedAt: getNoteUpdatedAt(note)
   });
 });
 
 // API: 获取笔记列表
 app.get('/api/notes', requireAuth, (req, res) => {
   const meta = readMeta();
-  const sorted = [...meta.notes].sort((a, b) => b.createdAt - a.createdAt);
+  const sorted = sortNotesByUpdatedAt(meta.notes);
   res.json(sorted);
 });
 
@@ -284,7 +304,8 @@ app.get('/api/notes', requireAuth, (req, res) => {
 app.post('/api/notes', requireAuth, (req, res) => {
   const meta = readMeta();
   const id = uuidv4();
-  const note = { id, title: req.body.title || '新建笔记', createdAt: Date.now() };
+  const now = Date.now();
+  const note = { id, title: req.body.title || '新建笔记', createdAt: now, updatedAt: now };
   meta.notes.push(note);
   writeMeta(meta);
   fs.writeFileSync(path.join(NOTES_DIR, `${id}.txt`), '');
@@ -338,6 +359,7 @@ app.put('/api/notes/:id/title', requireAuth, (req, res) => {
   if (!note) return res.status(404).json({ success: false, message: 'Not found' });
 
   note.title = title || '无标题';
+  markNoteAsEdited(note);
   writeMeta(meta);
   res.json({ success: true, title: note.title });
 });
@@ -364,6 +386,7 @@ app.post('/save/:id', requireAuth, (req, res) => {
     }
   });
   note.attachments = currentAttachments;
+  markNoteAsEdited(note);
   writeMeta(meta);
 
   res.json({ success: true });

@@ -106,6 +106,12 @@
         if (nextActive) nextActive.classList.add('active');
       }
 
+      function moveNoteToTop(id) {
+        var item = noteList.querySelector('.note-item[data-id="' + id + '"]');
+        if (!item || noteList.firstElementChild === item) return;
+        noteList.insertBefore(item, noteList.firstElementChild);
+      }
+
       function updateNoteView(note) {
         currentId = note.id;
         editor.value = note.content || '';
@@ -148,6 +154,7 @@
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         xhr.onload = function() {
           if (xhr.status === 200) {
+            moveNoteToTop(currentId);
             showStatus('已保存', 'success');
           } else {
             showStatus('保存失败', 'error');
@@ -170,6 +177,7 @@
             document.title = res.title + ' - 在线记事本';
             var item = document.querySelector('.note-item[data-id="' + currentId + '"] .note-link');
             if (item) item.textContent = res.title;
+            moveNoteToTop(currentId);
             showStatus('已保存', 'success');
           } else {
             showStatus('标题保存失败', 'error');
