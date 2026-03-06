@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -58,7 +58,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -119,6 +119,11 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
       - name: Download release archives
         uses: actions/download-artifact@v5
         with:
@@ -132,12 +137,31 @@ jobs:
         run: |
           set -euo pipefail
 
+          previous_tag="$(git describe --tags --abbrev=0 "${VERSION}^" 2>/dev/null || true)"
+          if [ -n "${previous_tag}" ]; then
+            commit_range="${previous_tag}..${VERSION}"
+            release_range="${previous_tag} -> ${VERSION}"
+          else
+            commit_range="${VERSION}"
+            release_range="初次发布"
+          fi
+
+          commit_notes="$(git log "${commit_range}" --pretty=format:'- %s (%h)' || true)"
+          if [ -z "${commit_notes}" ]; then
+            commit_notes="- 无可用提交记录"
+          fi
+
           cd dist
           sha256sum *.tar.gz *.zip > SHA256SUMS.txt
           cd ..
 
           cat > RELEASE_NOTES.md <<EOF
           自动构建的 ${VERSION} Release。
+
+          版本范围：${release_range}
+
+          本次提交：
+          ${commit_notes}
 
           包含平台：
           - Linux amd64 / arm64

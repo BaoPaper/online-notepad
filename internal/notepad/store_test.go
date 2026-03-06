@@ -119,3 +119,32 @@ func TestStoreMigratesLegacyNotes(t *testing.T) {
 		t.Fatal("expected migrated flag to be true")
 	}
 }
+
+func TestEnsureLandingNoteRecreatesMissingNotesDir(t *testing.T) {
+	app := newTestApp(t)
+	store := app.store
+
+	if err := os.RemoveAll(store.notesDir); err != nil {
+		t.Fatalf("remove notes dir: %v", err)
+	}
+
+	id, err := store.ensureLandingNote()
+	if err != nil {
+		t.Fatalf("ensureLandingNote: %v", err)
+	}
+	if id == "" {
+		t.Fatal("expected landing note id")
+	}
+
+	if _, err := os.Stat(store.notePath(id)); err != nil {
+		t.Fatalf("expected landing note file to exist, stat err = %v", err)
+	}
+
+	notes, err := store.listNotes()
+	if err != nil {
+		t.Fatalf("listNotes: %v", err)
+	}
+	if len(notes) != 1 || notes[0].ID != id {
+		t.Fatalf("notes = %#v, want one landing note %q", notes, id)
+	}
+}

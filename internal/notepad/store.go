@@ -15,7 +15,7 @@ func (s *Store) bootstrap() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := os.MkdirAll(s.notesDir, 0o755); err != nil {
+	if err := s.ensureNotesDirLocked(); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(s.uploadsDir, 0o755); err != nil {
@@ -23,6 +23,17 @@ func (s *Store) bootstrap() error {
 	}
 
 	return s.migrateOldNotesLocked()
+}
+
+func (s *Store) ensureNotesDirLocked() error {
+	return os.MkdirAll(s.notesDir, 0o755)
+}
+
+func (s *Store) writeNoteLocked(id string, content []byte) error {
+	if err := s.ensureNotesDirLocked(); err != nil {
+		return err
+	}
+	return os.WriteFile(s.notePath(id), content, 0o644)
 }
 
 func (s *Store) ensureLandingNote() (string, error) {
@@ -45,7 +56,7 @@ func (s *Store) ensureLandingNote() (string, error) {
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	if err := os.WriteFile(s.notePath(note.ID), []byte(""), 0o644); err != nil {
+	if err := s.writeNoteLocked(note.ID, []byte("")); err != nil {
 		return "", err
 	}
 
@@ -108,7 +119,7 @@ func (s *Store) createNote(title string) (Note, error) {
 		UpdatedAt: now,
 	}
 
-	if err := os.WriteFile(s.notePath(note.ID), []byte(""), 0o644); err != nil {
+	if err := s.writeNoteLocked(note.ID, []byte("")); err != nil {
 		return Note{}, err
 	}
 
@@ -190,7 +201,7 @@ func (s *Store) saveNoteContent(id, content string) (bool, error) {
 		return false, nil
 	}
 
-	if err := os.WriteFile(s.notePath(id), []byte(content), 0o644); err != nil {
+	if err := s.writeNoteLocked(id, []byte(content)); err != nil {
 		return false, err
 	}
 
@@ -253,7 +264,7 @@ func (s *Store) migrateOldNotesLocked() error {
 
 		if strings.TrimSpace(string(content)) != "" {
 			id := uuidString()
-			if err := os.WriteFile(s.notePath(id), content, 0o644); err != nil {
+			if err := s.writeNoteLocked(id, content); err != nil {
 				return err
 			}
 
@@ -305,6 +316,9 @@ func (s *Store) writeMetaLocked(meta Meta) error {
 		return err
 	}
 	data = append(data, '\n')
+	if err := s.ensureNotesDirLocked(); err != nil {
+		return err
+	}
 	return os.WriteFile(s.metaFile, data, 0o644)
 }
 
