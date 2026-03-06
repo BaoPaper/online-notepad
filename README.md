@@ -40,7 +40,8 @@
 SimpleNote/
 ├── .github/
 │   └── workflows/
-│       └── docker-build.yml   # GHCR 镜像构建工作流
+│       ├── docker-build.yml   # GHCR 镜像构建工作流
+│       └── release.yml        # Tag 触发的 Release 工作流
 ├── internal/
 │   └── notepad/
 │       ├── app.go             # 应用装配与启动入口
@@ -163,6 +164,14 @@ go test ./...
 go build ./...
 docker compose up --build
 ```
+
+## Release 发布
+
+- 推送 `v*` 格式的 Tag（如 `v1.0.0`）后，会自动执行 `.github/workflows/release.yml`
+- 工作流会先运行 `go test ./...`，再交叉编译 Linux、macOS、Windows 的可执行包并创建 GitHub Release
+- 同一个 Tag 也会触发 `.github/workflows/docker-build.yml`，向 GHCR 推送版本镜像标签
+- Release 与 Docker 工作流都不需要额外配置仓库 Secrets 或 Variables，直接使用 GitHub 自动提供的 `GITHUB_TOKEN`
+- 只有在实际运行应用时，才需要配置 `PASSWORD`、`JWT_SECRET` 等环境变量
 
 ## License
 
