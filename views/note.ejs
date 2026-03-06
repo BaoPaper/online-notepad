@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= currentTitle %> - 在线记事本</title>
+  <title>{{ .CurrentTitle }} - {{ .AppName }}</title>
   <link rel="stylesheet" href="/css/style.css" id="theme-style">
   <script src="/js/marked.min.js"></script>
   <script src="/js/purify.min.js"></script>
@@ -21,12 +21,12 @@
         <button class="new-note-btn" id="new-note-btn">+ 新建笔记</button>
       </div>
       <div class="note-list" id="note-list">
-        <% notes.forEach(function(n) { %>
-          <div class="note-item <%= n.id === currentId ? 'active' : '' %>" data-id="<%= n.id %>">
-            <a href="/note/<%= n.id %>" class="note-link"><%= n.title %></a>
-            <button class="delete-btn" data-id="<%= n.id %>" title="删除">×</button>
+        {{ range .Notes }}
+          <div class="note-item {{ if eq .ID $.CurrentID }}active{{ end }}" data-id="{{ .ID }}">
+            <a href="/note/{{ .ID }}" class="note-link">{{ .Title }}</a>
+            <button class="delete-btn" data-id="{{ .ID }}" title="删除">×</button>
           </div>
-        <% }); %>
+        {{ end }}
       </div>
       <div class="sidebar-footer">
         <a class="logout-btn" href="/logout">退出登录</a>
@@ -37,7 +37,7 @@
     <main class="main-content">
       <div class="toolbar">
         <button class="menu-toggle-btn" id="menu-toggle">☰</button>
-        <input type="text" class="title-input" id="title-input" value="<%= currentTitle %>" placeholder="笔记标题">
+        <input type="text" class="title-input" id="title-input" value="{{ .CurrentTitle }}" placeholder="笔记标题">
         <div id="status-indicator" class="status-indicator">
           <span class="status-dot"></span>
           <span class="status-text">已保存</span>
@@ -54,7 +54,7 @@
         </div>
       </div>
       <div class="editor-container" id="editor-container">
-        <textarea name="note" id="editor" spellcheck="false"><%= note %></textarea>
+        <textarea name="note" id="editor" spellcheck="false">{{ .Note }}</textarea>
         <div id="preview" class="preview-pane"></div>
       </div>
     </main>
@@ -62,7 +62,8 @@
 
   <script>
     (function() {
-      var currentId = '<%= currentId %>';
+      var appName = '{{ .AppName }}';
+      var currentId = '{{ .CurrentID }}';
       var editor = document.getElementById('editor');
       var preview = document.getElementById('preview');
       var editorContainer = document.getElementById('editor-container');
@@ -116,7 +117,7 @@
         currentId = note.id;
         editor.value = note.content || '';
         titleInput.value = note.title || '无标题';
-        document.title = titleInput.value + ' - 在线记事本';
+        document.title = titleInput.value + ' - ' + appName;
         setActiveNote(note.id);
         renderMarkdown();
       }
@@ -174,7 +175,7 @@
         xhr.onload = function() {
           if (xhr.status === 200) {
             var res = JSON.parse(xhr.responseText);
-            document.title = res.title + ' - 在线记事本';
+            document.title = res.title + ' - ' + appName;
             var item = document.querySelector('.note-item[data-id="' + currentId + '"] .note-link');
             if (item) item.textContent = res.title;
             moveNoteToTop(currentId);

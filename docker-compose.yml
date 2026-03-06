@@ -1,8 +1,8 @@
-version: '3'
 services:
-  online-notepad:
-    image: online-notepad
-    container_name: online-notepad
+  simplenote:
+    build: .
+    image: simplenote
+    container_name: simplenote
     ports:
       - "13000:3000"
     volumes:
@@ -11,3 +11,4 @@ services:
     restart: always
     environment:
       - PASSWORD=${PASSWORD:-password}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
